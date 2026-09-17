@@ -5,6 +5,25 @@ const URL_APKS = "https://script.google.com/macros/s/AKfycbx94fTsDD4lMuNLElpkq2d
 let actividadActualSeleccionada = null;
 let modoEdicionId = null; // Si tiene valor, estamos editando en vez de creando
 
+// Función para formatear la fecha y hora de la base de datos de forma limpia
+function formatearFechaHora(fechaStr, horaStr) {
+    let fechaLimpia = fechaStr;
+    let horaLimpia = horaStr;
+
+    // Si la fecha viene en formato ISO (ej. 2026-09-18T03:00:00.000Z), extraemos solo YYYY-MM-DD
+    if (fechaStr && fechaStr.includes('T')) {
+        fechaLimpia = fechaStr.split('T')[0];
+    }
+    // Si la hora viene con formato de fecha extraña de Sheets, intentamos extraer la hora real
+    if (horaStr && horaStr.includes('T')) {
+        let partesHora = horaStr.split('T')[1];
+        if (partesHora) {
+            horaLimpia = partesHora.substring(0, 5); // HH:mm
+        }
+    }
+    return `${fechaLimpia} - ${horaLimpia}`;
+}
+
 // Funciones globales para cambiar entre vistas (Pestañas)
 function cambiarVista(vista) {
     const vistaForm = document.getElementById('vista-form');
@@ -33,7 +52,7 @@ function verDetalle(item) {
 
     document.getElementById('det-nombre').innerText = item.nombre_actividad;
     document.getElementById('det-categoria').innerText = item.categoria;
-    document.getElementById('det-fechahora').innerText = `${item.fecha} - ${item.hora}`;
+    document.getElementById('det-fechahora').innerText = formatearFechaHora(item.fecha, item.hora);
     document.getElementById('det-descripcion').innerText = item.descripcion || "Sin notas adicionales.";
 
     const bloqueClienteModal = document.getElementById('det-bloque-cliente');
@@ -152,7 +171,7 @@ function cargarAgenda() {
                 tarjeta.innerHTML = `
                     <div class="tarjeta-header">
                         <span class="badge ${claseBadge}">${item.categoria}</span>
-                        <span class="tarjeta-fecha">${item.fecha} - ${item.hora}</span>
+                        <span class="tarjeta-fecha">${formatearFechaHora(item.fecha, item.hora)}</span>
                     </div>
                     <h4>${item.nombre_actividad}</h4>
                     ${clienteTexto}
@@ -210,7 +229,6 @@ document.addEventListener('DOMContentLoaded', function() {
     formulario.addEventListener('submit', function(e) {
         e.preventDefault();
 
-        // Validamos si estamos creando o editando
         const esEdicion = modoEdicionId !== null;
         const mensajeConfirmacion = esEdicion 
             ? "¿Está seguro de guardar los cambios en esta actividad?" 
@@ -246,7 +264,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(() => {
             alert(esEdicion ? "¡Actividad actualizada con éxito!" : "¡Actividad guardada con éxito y programada en Google Calendar!");
             
-            // Reseteamos estados de edición
             formulario.reset();
             modoEdicionId = null;
             botonSubmit.innerText = "Guardar Actividad";
@@ -254,7 +271,6 @@ document.addEventListener('DOMContentLoaded', function() {
             cambiarVistaFormulario();
             actualizarLinkMapa();
             
-            // Nos vamos a la vista de la lista para ver el cambio
             cambiarVista('lista');
         })
         .catch(error => {
