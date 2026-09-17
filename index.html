@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="./img/ca.png">
+    <title>Agenda</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h2>Agenda Abel</h2>
+
+        <!-- Botones de navegación entre vistas -->
+        <div class="nav-tabs">
+            <button id="btn-tab-form" class="tab-btn activo" onclick="cambiarVista('form')">Nueva Actividad</button>
+            <button id="btn-tab-lista" class="tab-btn" onclick="cambiarVista('lista')">Ver Agenda</button>
+        </div>
+        
+        <!-- VISTA 1: FORMULARIO PARA CREAR -->
+        <div id="vista-form" class="vista-seccion">
+            <form id="form-agenda">
+                <div class="form-group">
+                    <label for="categoria">Categoría:</label>
+                    <select id="categoria">
+                        <option value="Personal">Personal</option>
+                        <option value="Turnos">Turnos</option>
+                        <option value="Trabajo">Trabajo</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="fecha">Fecha:</label>
+                    <input type="date" id="fecha" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="hora">Hora:</label>
+                    <input type="time" id="hora" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="nombre_actividad">Nombre de la Actividad:</label>
+                    <input type="text" id="nombre_actividad" placeholder="Ej. Instalación o revisión" required>
+                </div>
+
+                <div id="bloque-trabajo" class="seccion-oculta">
+                    <div class="form-group">
+                        <label for="nombre_cliente">Nombre del Cliente:</label>
+                        <input type="text" id="nombre_cliente" placeholder="Nombre y apellido o empresa">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="direccion">Dirección:</label>
+                        <div class="input-con-link">
+                            <input type="text" id="direccion" placeholder="Calle, número, ciudad">
+                            <a id="link-mapa" href="#" target="_blank" class="btn-mapa">Ver en Maps</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="descripcion">Descripción / Notas:</label>
+                    <textarea id="descripcion" rows="3" placeholder="Detalles adicionales..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-guardar">Guardar Actividad</button>
+            </form>
+        </div>
+
+        <!-- VISTA 2: LISTA DE ACTIVIDADES (Y DETALLE) -->
+        <div id="vista-lista" class="vista-seccion seccion-oculta">
+            <h3>Actividades Agendadas</h3>
+            <!-- Aquí aparecerá la lista de eventos guardados -->
+            <div id="lista-actividades" class="lista-tarjetas">
+                <!-- Ejemplo visual estático de cómo se verá una tarjeta -->
+                <div class="tarjeta-evento" onclick="verDetalle('Ejemplo', 'Trabajo', 'Juan Pérez', 'Av. Corrientes 1234, Córdoba')">
+                    <div class="tarjeta-header">
+                        <span class="badge trabajo">Trabajo</span>
+                        <span class="tarjeta-fecha">17/06/2026 - 10:30</span>
+                    </div>
+                    <h4>Instalación de equipos</h4>
+                    <p><strong>Cliente:</strong> Juan Pérez</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal o sección para ver el detalle completo al hacer clic -->
+    <div id="modal-detalle" class="modal seccion-oculta">
+        <div class="modal-contenido">
+            <span class="cerrar-modal" onclick="cerrarDetalle()">&times;</span>
+            <h3>Detalle de la Actividad</h3>
+            <p><strong>Actividad:</strong> <span id="det-nombre"></span></p>
+            <p><strong>Categoría:</strong> <span id="det-categoria"></span></p>
+            <p><strong>Fecha y Hora:</strong> <span id="det-fechahora"></span></p>
+            <div id="det-bloque-cliente" class="seccion-oculta">
+                <p><strong>Cliente:</strong> <span id="det-cliente"></span></p>
+                <p><strong>Dirección:</strong> <span id="det-direccion"></span></p>
+                <a id="det-link-mapa" href="#" target="_blank" class="btn-mapa" style="margin-top: 10px;">Abrir en Google Maps</a>
+            </div>
+            <p><strong>Notas:</strong> <span id="det-descripcion"></span></p>
+
+            <!-- NUEVOS BOTONES DE ACCIÓN (EDITAR / ELIMINAR) -->
+            <div class="modal-acciones" style="margin-top: 20px; display: flex; gap: 10px; justify-content: space-between;">
+                <button type="button" id="btn-editar" class="btn-guardar" style="background-color: #f0ad4e;" onclick="prepararEdicion()">Editar</button>
+                <button type="button" id="btn-eliminar" class="btn-guardar" style="background-color: #d9534f;" onclick="eliminarActividadModal()">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
