@@ -3,28 +3,24 @@ const URL_APKS = "https://script.google.com/macros/s/AKfycbx94fTsDD4lMuNLElpkq2d
 
 // Variable global para almacenar temporalmente la actividad seleccionada en el modal
 let actividadActualSeleccionada = null;
-let modoEdicionId = null; // Si tiene valor, estamos editando en vez de creando
+let modoEdicionId = null; 
 
-// Función para formatear la fecha y hora de la base de datos de forma limpia
+// Función para formatear la fecha y hora de forma limpia
 function formatearFechaHora(fechaStr, horaStr) {
-    let fechaLimpia = fechaStr;
-    let horaLimpia = horaStr;
-
-    // Si la fecha viene en formato ISO (ej. 2026-09-18T03:00:00.000Z), extraemos solo YYYY-MM-DD
-    if (fechaStr && fechaStr.includes('T')) {
-        fechaLimpia = fechaStr.split('T')[0];
+    let fechaLimpia = fechaStr ? fechaStr.toString().split('T')[0] : "";
+    let horaLimpia = horaStr ? horaStr.toString() : "00:00";
+    
+    if (horaLimpia.includes('T')) {
+        let partes = horaLimpia.split('T');
+        if (partes[1]) horaLimpia = partes[1].substring(0, 5);
+    } else if (horaLimpia.length > 5) {
+        horaLimpia = horaLimpia.substring(0, 5);
     }
-    // Si la hora viene con formato de fecha extraña de Sheets, intentamos extraer la hora real
-    if (horaStr && horaStr.includes('T')) {
-        let partesHora = horaStr.split('T')[1];
-        if (partesHora) {
-            horaLimpia = partesHora.substring(0, 5); // HH:mm
-        }
-    }
+    
     return `${fechaLimpia} - ${horaLimpia}`;
 }
 
-// Funciones globales para cambiar entre vistas (Pestañas)
+// Funciones globales para cambiar entre vistas
 function cambiarVista(vista) {
     const vistaForm = document.getElementById('vista-form');
     const vistaLista = document.getElementById('vista-lista');
@@ -48,7 +44,7 @@ function cambiarVista(vista) {
 
 // Funciones para ver el detalle flotante (Modal)
 function verDetalle(item) {
-    actividadActualSeleccionada = item; // Guardamos el objeto completo
+    actividadActualSeleccionada = item;
 
     document.getElementById('det-nombre').innerText = item.nombre_actividad;
     document.getElementById('det-categoria').innerText = item.categoria;
@@ -80,7 +76,7 @@ function cerrarDetalle() {
     document.getElementById('modal-detalle').classList.add('seccion-oculta');
 }
 
-// Función para preparar la Edición (Pasa los datos al formulario y cambia a esa pestaña)
+// Función para preparar la Edición
 function prepararEdicion() {
     if (!actividadActualSeleccionada) return;
 
@@ -88,36 +84,45 @@ function prepararEdicion() {
         return;
     }
 
-    // Rellenamos el formulario con los datos actuales
     document.getElementById('categoria').value = actividadActualSeleccionada.categoria;
-    document.getElementById('fecha').value = actividadActualSeleccionada.fecha;
-    document.getElementById('hora').value = actividadActualSeleccionada.hora;
+    
+    let fechaFormato = actividadActualSeleccionada.fecha;
+    if (fechaFormato && fechaFormato.includes('T')) {
+        fechaFormato = fechaFormato.split('T')[0];
+    }
+    document.getElementById('fecha').value = fechaFormato;
+
+    let horaFormato = actividadActualSeleccionada.hora;
+    if (horaFormato && horaFormato.includes('T')) {
+        let partes = horaFormato.split('T');
+        if (partes[1]) horaFormato = partes[1].substring(0, 5);
+    } else if (horaFormato && horaFormato.length > 5) {
+        horaFormato = horaFormato.substring(0, 5);
+    }
+    document.getElementById('hora').value = horaFormato;
+
     document.getElementById('nombre_actividad').value = actividadActualSeleccionada.nombre_actividad;
     document.getElementById('nombre_cliente').value = actividadActualSeleccionada.nombre_cliente || "";
     document.getElementById('direccion').value = actividadActualSeleccionada.direccion || "";
     document.getElementById('descripcion').value = actividadActualSeleccionada.descripcion || "";
 
-    // Activamos modo edición guardando el ID
     modoEdicionId = actividadActualSeleccionada.id;
 
-    // Cambiamos el texto del botón del formulario para indicar que se está actualizando
     const btnSubmit = document.querySelector('#form-agenda button[type="submit"]');
-    btnSubmit.innerText = "Actualizar Actividad";
+    if (btnSubmit) btnSubmit.innerText = "Actualizar Actividad";
 
-    // Disparamos eventos visuales del form
     document.getElementById('categoria').dispatchEvent(new Event('change'));
     document.getElementById('direccion').dispatchEvent(new Event('input'));
 
-    // Cerramos modal y cambiamos a la pestaña de formulario
     cerrarDetalle();
     cambiarVista('form');
 }
 
-// Función para Eliminar con confirmación
+// Función para Eliminar con confirmación y retraso de refresco
 function eliminarActividadModal() {
     if (!actividadActualSeleccionada) return;
 
-    if (!confirm("¿Está seguro de que desea ELIMINAR esta actividad de la agenda? Esta acción no se puede deshacer.")) {
+    if (!confirm("¿Está seguro de que desea ELIMINAR esta actividad de la agenda?")) {
         return;
     }
 
@@ -135,7 +140,10 @@ function eliminarActividadModal() {
     .then(() => {
         alert("Actividad eliminada con éxito.");
         cerrarDetalle();
-        cargarAgenda(); // Recargamos la lista
+        // Damos un respiro de 1 segundo para que Google Sheets procese antes de recargar
+        setTimeout(() => {
+            cargarAgenda();
+        }, 1000);
     })
     .catch(error => {
         console.error('Error:', error);
@@ -143,22 +151,73 @@ function eliminarActividadModal() {
     });
 }
 
-// Función para cargar y mostrar las actividades desde Google Sheets
+// Función para cargar, ordenar, filtrar y mostrar las actividades
 function cargarAgenda() {
     const contenedorLista = document.getElementById('lista-actividades');
+    if (!contenedorLista) return;
+    
     contenedorLista.innerHTML = "<p>Cargando actividades...</p>";
 
-    fetch(URL_APKS)
-        .then(response => response.json())
+    fetch(URL_APKS, { redirect: 'follow' })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error en la red al conectar con Google Sheets');
+            }
+            return response.json();
+        })
         .then(data => {
             contenedorLista.innerHTML = ""; 
 
-            if (!data || data.length === 0) {
+            if (!data || !Array.isArray(data) || data.length === 0) {
                 contenedorLista.innerHTML = "<p>No hay actividades agendadas todavía.</p>";
                 return;
             }
 
-            data.forEach(item => {
+            const hoy = new Date();
+            const limiteAyer = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1);
+
+            let actividadesFiltradas = data.filter(item => {
+                if (!item.fecha) return false;
+                let fechaStr = item.fecha.toString().split('T')[0];
+                let horaStr = item.hora ? item.hora.toString() : "00:00";
+                if (horaStr.includes('T')) {
+                    let partes = horaStr.split('T');
+                    if (partes[1]) horaStr = partes[1].substring(0, 5);
+                } else if (horaStr.length > 5) {
+                    horaStr = horaStr.substring(0, 5);
+                }
+
+                let fechaHoraItem = new Date(`${fechaStr}T${horaStr}:00`);
+                return fechaHoraItem >= limiteAyer;
+            });
+
+            if (actividadesFiltradas.length === 0) {
+                contenedorLista.innerHTML = "<p>No hay actividades pendientes o recientes.</p>";
+                return;
+            }
+
+            actividadesFiltradas.sort((a, b) => {
+                let fechaA = a.fecha.toString().split('T')[0];
+                let horaA = a.hora ? a.hora.toString().substring(0, 5) : "00:00";
+                if (a.hora && a.hora.toString().includes('T')) {
+                    let p = a.hora.toString().split('T');
+                    if (p[1]) horaA = p[1].substring(0, 5);
+                }
+
+                let fechaB = b.fecha.toString().split('T')[0];
+                let horaB = b.hora ? b.hora.toString().substring(0, 5) : "00:00";
+                if (b.hora && b.hora.toString().includes('T')) {
+                    let p = b.hora.toString().split('T');
+                    if (p[1]) horaB = p[1].substring(0, 5);
+                }
+
+                let tA = new Date(`${fechaA}T${horaA}:00`).getTime();
+                let tB = new Date(`${fechaB}T${horaB}:00`).getTime();
+
+                return tA - tB;
+            });
+
+            actividadesFiltradas.forEach(item => {
                 const tarjeta = document.createElement('div');
                 tarjeta.className = 'tarjeta-evento';
                 
@@ -178,7 +237,7 @@ function cargarAgenda() {
                 `;
 
                 tarjeta.onclick = function() {
-                    verDetalle(item); // Le pasamos todo el objeto item completo
+                    verDetalle(item); 
                 };
 
                 contenedorLista.appendChild(tarjeta);
@@ -199,87 +258,98 @@ document.addEventListener('DOMContentLoaded', function() {
     const formulario = document.getElementById('form-agenda');
 
     function cambiarVistaFormulario() {
-        if (selectCategoria.value === 'Trabajo') {
-            bloqueTrabajo.style.display = 'block';
-        } else {
-            bloqueTrabajo.style.display = 'none';
+        if (selectCategoria && bloqueTrabajo) {
+            if (selectCategoria.value === 'Trabajo') {
+                bloqueTrabajo.style.display = 'block';
+            } else {
+                bloqueTrabajo.style.display = 'none';
+            }
         }
     }
 
     function actualizarLinkMapa() {
-        const direccionTexto = inputDireccion.value.trim();
-        if (direccionTexto !== "") {
-            linkMapa.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionTexto)}`;
-            linkMapa.style.pointerEvents = "auto";
-            linkMapa.style.opacity = "1";
-        } else {
-            linkMapa.href = "#";
-            linkMapa.style.pointerEvents = "none";
-            linkMapa.style.opacity = "0.5";
+        if (inputDireccion && linkMapa) {
+            const direccionTexto = inputDireccion.value.trim();
+            if (direccionTexto !== "") {
+                linkMapa.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionTexto)}`;
+                linkMapa.style.pointerEvents = "auto";
+                linkMapa.style.opacity = "1";
+            } else {
+                linkMapa.href = "#";
+                linkMapa.style.pointerEvents = "none";
+                linkMapa.style.opacity = "0.5";
+            }
         }
     }
 
-    selectCategoria.addEventListener('change', cambiarVistaFormulario);
-    inputDireccion.addEventListener('input', actualizarLinkMapa);
+    if (selectCategoria) selectCategoria.addEventListener('change', cambiarVistaFormulario);
+    if (inputDireccion) inputDireccion.addEventListener('input', actualizarLinkMapa);
     
     cambiarVistaFormulario();
     actualizarLinkMapa();
 
-    // Envío de datos (Crear o Actualizar)
-    formulario.addEventListener('submit', function(e) {
-        e.preventDefault();
+    if (formulario) {
+        formulario.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-        const esEdicion = modoEdicionId !== null;
-        const mensajeConfirmacion = esEdicion 
-            ? "¿Está seguro de guardar los cambios en esta actividad?" 
-            : "¿Está seguro de crear esta nueva actividad?";
+            const esEdicion = modoEdicionId !== null;
+            const mensajeConfirmacion = esEdicion 
+                ? "¿Está seguro de guardar los cambios en esta actividad?" 
+                : "¿Está seguro de crear esta nueva actividad?";
 
-        if (!confirm(mensajeConfirmacion)) {
-            return;
-        }
+            if (!confirm(mensajeConfirmacion)) {
+                return;
+            }
 
-        var datosActividad = {
-            action: esEdicion ? "update" : "create",
-            id: esEdicion ? modoEdicionId : new Date().getTime().toString(),
-            categoria: selectCategoria.value,
-            fecha: document.getElementById('fecha').value,
-            hora: document.getElementById('hora').value,
-            nombre_actividad: document.getElementById('nombre_actividad').value,
-            nombre_cliente: document.getElementById('nombre_cliente').value || "",
-            direccion: inputDireccion.value || "",
-            descripcion: document.getElementById('descripcion').value || ""
-        };
+            var datosActividad = {
+                action: esEdicion ? "update" : "create",
+                id: esEdicion ? modoEdicionId : new Date().getTime().toString(),
+                categoria: selectCategoria.value,
+                fecha: document.getElementById('fecha').value,
+                hora: document.getElementById('hora').value,
+                nombre_actividad: document.getElementById('nombre_actividad').value,
+                nombre_cliente: document.getElementById('nombre_cliente').value || "",
+                direccion: inputDireccion.value || "",
+                descripcion: document.getElementById('descripcion').value || ""
+            };
 
-        const botonSubmit = formulario.querySelector('button[type="submit"]');
-        const textoOriginal = botonSubmit.innerText;
-        botonSubmit.innerText = esEdicion ? "Actualizando..." : "Guardando...";
-        botonSubmit.disabled = true;
+            const botonSubmit = formulario.querySelector('button[type="submit"]');
+            if (botonSubmit) {
+                botonSubmit.innerText = esEdicion ? "Actualizando..." : "Guardando...";
+                botonSubmit.disabled = true;
+            }
 
-        fetch(URL_APKS, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datosActividad)
-        })
-        .then(() => {
-            alert(esEdicion ? "¡Actividad actualizada con éxito!" : "¡Actividad guardada con éxito y programada en Google Calendar!");
-            
-            formulario.reset();
-            modoEdicionId = null;
-            botonSubmit.innerText = "Guardar Actividad";
-            
-            cambiarVistaFormulario();
-            actualizarLinkMapa();
-            
-            cambiarVista('lista');
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert("Hubo un error al intentar procesar la actividad.");
-        })
-        .finally(() => {
-            botonSubmit.innerText = esEdicion ? "Actualizar Actividad" : "Guardar Actividad";
-            botonSubmit.disabled = false;
+            fetch(URL_APKS, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datosActividad)
+            })
+            .then(() => {
+                alert(esEdicion ? "¡Actividad actualizada con éxito!" : "¡Actividad guardada con éxito y programada en Google Calendar!");
+                
+                formulario.reset();
+                modoEdicionId = null;
+                if (botonSubmit) botonSubmit.innerText = "Guardar Actividad";
+                
+                cambiarVistaFormulario();
+                actualizarLinkMapa();
+                
+                // Damos 1 segundo de respiro antes de cambiar a la lista para asegurar que Sheets registre el cambio
+                setTimeout(() => {
+                    cambiarVista('lista');
+                }, 1000);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert("Hubo un error al intentar procesar la actividad.");
+            })
+            .finally(() => {
+                if (botonSubmit) {
+                    botonSubmit.innerText = esEdicion ? "Actualizar Actividad" : "Guardar Actividad";
+                    botonSubmit.disabled = false;
+                }
+            });
         });
-    });
+    }
 });
